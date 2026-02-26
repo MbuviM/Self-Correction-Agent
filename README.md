@@ -1,18 +1,104 @@
 # Self-Correction-Agent
-The Problem Statement: "The Self-Correction Agent" 
-The Goal: Build a system that takes a complex user query, generates a multi-step plan to solve it, executes those steps using different AI models (e.g., one for logic, one for code), and critiques its own output before showing it to the user.
 
-Technical Requirements
-1. The Backend (TypeScript & LangGraph)
-The Router: Create a TypeScript function that classifies an incoming request (e.g., "Research," "Code," or "Analysis").
+This repository contains a prototype AI assistant called **Killua AI**.  
+The project focuses on one core behavior: the assistant runs internal stages (`thinking`, `verifying`, `correcting`, `finalizing`) before returning a final response.
 
-The Loop: Implement a LangGraph (or a basic state machine) where the AI generates a response, and then a second AI call evaluates that response for hallucinations or syntax errors.
+## Current Scope
 
-The State: Use a strict TypeScript Interface to track the state of the conversation (e.g., isError: boolean, retryCount: number, rawOutput: string).
+- Frontend: React + TypeScript + Vite + Tailwind CSS
+- Backend: TypeScript WebSocket server (`ws`)
+- UI: chat interface with a placeholder sidebar for past conversations
+- Streaming model: status updates first, then final output
 
-2. The Frontend (Flutter)
-The Visualization: Build a Flutter app that doesn't just show the final answer, but shows the "Thought Process" in real-time.
+## Repository Structure
 
-State Management: Use the Provider or Bloc pattern to update the UI as the backend moves through its nodes (e.g., a "Thinking..." spinner that changes to "Critiquing..." then "Finalizing...").
+```text
+Self-Correction-Agent/
+|-- backend/
+|   |-- server.ts
+|   |-- agent.ts
+|   |-- pinecone.ts
+|   `-- package.json
+|-- frontend/
+|   |-- src/
+|   |   |-- App.tsx
+|   |   |-- main.tsx
+|   |   `-- index.css
+|   `-- package.json
+`-- README.md
+```
 
-Streaming: Use WebSockets or Server-Sent Events (SSE) so the Flutter app "streams" the tokens as they are generated, just like a pro AI interface.
+## Prerequisites
+
+- Node.js 20+ recommended
+- npm
+
+## Setup
+
+### 1. Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+### 2. Backend
+
+The current `backend/package.json` is minimal, so install runtime/dev dependencies manually if needed:
+
+```bash
+cd backend
+npm install ws
+npm install -D typescript ts-node @types/node @types/ws
+```
+
+## Run the Project
+
+Start backend (Terminal 1):
+
+```bash
+cd backend
+npx ts-node server.ts
+```
+
+Start frontend (Terminal 2):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open the Vite URL shown in terminal (typically `http://localhost:5173`).
+
+## WebSocket Contract
+
+### Client to server
+
+```json
+{ "type": "start_analysis", "prompt": "Your question here" }
+```
+
+### Server to client (status events)
+
+```json
+{ "type": "status", "stage": "thinking" }
+```
+
+```json
+{ "type": "status", "stage": "correcting" }
+```
+
+### Server to client (final event)
+
+```json
+{
+  "type": "final",
+  "content": "Backend processed successfully. Placeholder for AI result.",
+  "justification": "Logic verified by user-defined constraints."
+}
+```
+
+## Notes
+
+- `backend/agent.ts` and `backend/pinecone.ts` are currently placeholders.
+- Frontend currently simulates the loop in `App.tsx`; `frontend/useSockets.ts` exists and can be wired for live backend streaming.
