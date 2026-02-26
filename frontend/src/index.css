@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap");
 @import "tailwindcss";
 
 html,
@@ -9,13 +9,13 @@ body,
 
 body {
   margin: 0;
-  background: #020617;
-  color: #e2e8f0;
-  font-family: "IBM Plex Mono", "Fira Code", "Consolas", monospace;
+  background: #f5f7ff;
+  color: #0f172a;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
 }
 
 .brand-font {
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  font-family: "Sora", "Segoe UI", sans-serif;
 }
 
 .message-entry {
@@ -23,11 +23,11 @@ body {
 }
 
 .animate-orbfloat {
-  animation: orb-float 11s ease-in-out infinite;
+  animation: orb-float 14s ease-in-out infinite;
 }
 
 .animate-orbfloat-delayed {
-  animation: orb-float 13s ease-in-out 1.2s infinite reverse;
+  animation: orb-float 17s ease-in-out 0.8s infinite reverse;
 }
 
 @keyframes message-rise {
