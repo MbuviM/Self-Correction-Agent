@@ -53,15 +53,6 @@ function ChevronRight({ size, className }: IconProps) {
   );
 }
 
-function RotateCcw({ size, className }: IconProps) {
-  return (
-    <IconBase size={size} className={className}>
-      <path d="M3 2v6h6" />
-      <path d="M3.3 8.7A9 9 0 1 0 7 4.6L3 8" />
-    </IconBase>
-  );
-}
-
 type Stage = 'thinking' | 'verifying' | 'correcting' | 'finalizing' | null;
 
 interface Message {
@@ -206,16 +197,7 @@ export default function AgentUI() {
 
               {status && (
                 <div className="message-entry flex justify-start">
-                  <div className="inline-flex items-center gap-3 rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-cyan-800 shadow-[0_0_20px_rgba(125,211,252,0.2)]">
-                    <span className="relative flex h-3 w-3">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400/60" />
-                      <span className="relative inline-flex h-3 w-3 rounded-full bg-cyan-500" />
-                    </span>
-                    <span className="text-xs uppercase tracking-[0.17em]">
-                      {status === 'correcting' && <RotateCcw size={13} className="mr-1 inline animate-[spin_1.6s_linear_infinite]" />}
-                      {statusCopy[status]}
-                    </span>
-                  </div>
+                  <p className="text-xs italic text-purple-700">{statusCopy[status]}...</p>
                 </div>
               )}
             </div>
