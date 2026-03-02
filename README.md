@@ -1,6 +1,6 @@
 # Self-Correction-Agent
 
-This project is now focused on one benchmark scenarii introduce to you **Killua AI** : **The Synthetic Senior Engineer**.
+Let me introduce to you **Killua AI** : **The Synthetic Senior Engineer**.
 
 The assistant is asked to generate a component that combines multiple advanced libraries (for example: Tailwind CSS, Pinecone SDK, and Framer Motion), while an internal **Auditor** verifies API correctness against stored documentation and forces rewrites until the output is valid.
 
