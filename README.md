@@ -1,104 +1,81 @@
 # Self-Correction-Agent
 
-This repository contains a prototype AI assistant called **Killua AI**.  
-The project focuses on one core behavior: the assistant runs internal stages (`thinking`, `verifying`, `correcting`, `finalizing`) before returning a final response.
+This project is now focused on one benchmark scenarii introduce to you **Killua AI** : **The Synthetic Senior Engineer**.
 
-## Current Scope
+The assistant is asked to generate a component that combines multiple advanced libraries (for example: Tailwind CSS, Pinecone SDK, and Framer Motion), while an internal **Auditor** verifies API correctness against stored documentation and forces rewrites until the output is valid.
 
-- Frontend: React + TypeScript + Vite + Tailwind CSS
-- Backend: TypeScript WebSocket server (`ws`)
-- UI: chat interface with a placeholder sidebar for past conversations
-- Streaming model: status updates first, then final output
+## Core Goal
+
+Build an AI workflow that can:
+
+1. Generate implementation code from a prompt.
+2. Detect hallucinated props, outdated methods, and version-mismatched syntax.
+3. Retrieve grounded facts from a Pinecone docs index.
+4. Self-correct and regenerate until the result is syntactically and semantically consistent.
+
+## Why This Project
+
+When one answer requires several libraries at once, LLMs commonly blend incompatible APIs.  
+This repo exists to test whether a structured correction loop (Generator -> Auditor -> Generator) can reliably fix those errors before final output.
+
+## System Outline
+
+- **Generator node**: Produces first-pass code.
+- **Auditor node**: Checks generated code against indexed docs.
+- **Retriever node (Pinecone)**: Returns relevant documentation chunks for evidence-backed correction.
+- **Finalizer node**: Returns corrected output with a short rationale.
 
 ## Repository Structure
 
 ```text
 Self-Correction-Agent/
 |-- backend/
+|   |-- agent.py
+|   |-- data_chunk.py
 |   |-- server.ts
-|   |-- agent.ts
-|   |-- pinecone.ts
 |   `-- package.json
+|-- datasets/
+|   |-- scrape.py
+|   `-- datasets/docs_text/
 |-- frontend/
 |   |-- src/
 |   |   |-- App.tsx
 |   |   |-- main.tsx
 |   |   `-- index.css
 |   `-- package.json
+|-- logic.txt
 `-- README.md
 ```
 
-## Prerequisites
+## Data Layer (Pinecone Ingestion)
 
-- Node.js 20+ recommended
-- npm
+Documentation corpora are chunked and ingested using `backend/data_chunk.py`.
 
-## Setup
+- Source files: `datasets/datasets/docs_text/*.txt`
+- Index type: Integrated embedding index (Pinecone)
+- Record flow: parse pages -> chunk text -> upsert records -> verify namespace stats
 
-### 1. Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-### 2. Backend
-
-The current `backend/package.json` is minimal, so install runtime/dev dependencies manually if needed:
+Run from repo root:
 
 ```bash
-cd backend
-npm install ws
-npm install -D typescript ts-node @types/node @types/ws
+python backend/data_chunk.py --namespace docs-v1
 ```
 
-## Run the Project
-
-Start backend (Terminal 1):
+Or from `backend/`:
 
 ```bash
-cd backend
-npx ts-node server.ts
+python data_chunk.py --namespace docs-v1
 ```
 
-Start frontend (Terminal 2):
+## Frontend + Backend Runtime (Current)
 
-```bash
-cd frontend
-npm run dev
-```
+- Frontend: React + TypeScript + Vite
+- Realtime channel: WebSocket (`backend/server.ts`)
+- Current stream behavior: status events followed by final response
 
-Open the Vite URL shown in terminal (typically `http://localhost:5173`).
+## Next Milestones
 
-## WebSocket Contract
-
-### Client to server
-
-```json
-{ "type": "start_analysis", "prompt": "Your question here" }
-```
-
-### Server to client (status events)
-
-```json
-{ "type": "status", "stage": "thinking" }
-```
-
-```json
-{ "type": "status", "stage": "correcting" }
-```
-
-### Server to client (final event)
-
-```json
-{
-  "type": "final",
-  "content": "Backend processed successfully. Placeholder for AI result.",
-  "justification": "Logic verified by user-defined constraints."
-}
-```
-
-## Notes
-
-- `backend/agent.ts` and `backend/pinecone.ts` are currently placeholders.
-- Frontend currently simulates the loop in `App.tsx`; `frontend/useSockets.ts` exists and can be wired for live backend streaming.
+1. Implement `backend/agent.py` as the Generator/Auditor orchestration layer.
+2. Route retrieval calls to Pinecone namespace docs used during ingestion.
+3. Surface correction traces in UI (`thinking -> verifying -> correcting -> final`).
+4. Add evaluation prompts that require all target libraries in one answer.
