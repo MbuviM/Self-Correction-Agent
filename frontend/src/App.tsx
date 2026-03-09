@@ -73,7 +73,78 @@ export default function AgentUI() {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<Stage>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const socketUrl = (import.meta.env.VITE_WS_URL as string | undefined) || 'ws://localhost:8080';
+    const ws = new WebSocket(socketUrl);
+    socketRef.current = ws;
+
+    ws.onopen = () => {
+      setIsConnected(true);
+    };
+
+    ws.onclose = () => {
+      setIsConnected(false);
+      setStatus(null);
+    };
+
+    ws.onerror = () => {
+      setIsConnected(false);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data as string) as {
+          type?: string;
+          stage?: string;
+          content?: string;
+        };
+
+        if (payload.type === 'status') {
+          const incomingStage = payload.stage;
+          if (
+            incomingStage === 'thinking' ||
+            incomingStage === 'verifying' ||
+            incomingStage === 'correcting' ||
+            incomingStage === 'finalizing'
+          ) {
+            setStatus(incomingStage);
+          }
+          return;
+        }
+
+        if (payload.type === 'final') {
+          const content = (payload.content || '').trim();
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `${Date.now()}-ai`,
+              sender: 'ai',
+              text: content || 'No response content returned.',
+            },
+          ]);
+          setStatus(null);
+        }
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-parse-error`,
+            sender: 'ai',
+            text: 'Received an invalid message from backend.',
+          },
+        ]);
+      }
+    };
+
+    return () => {
+      ws.close();
+      socketRef.current = null;
+    };
+  }, []);
 
   // Auto-scroll to bottom on new messages or status changes
   useEffect(() => {
@@ -85,33 +156,28 @@ export default function AgentUI() {
     
     const userMsg: Message = { id: Date.now().toString(), text: input, sender: 'user' };
     setMessages(prev => [...prev, userMsg]);
+    const prompt = input;
     setInput('');
-    
-    // Simulate the Backend Agent Loop
-    simulateAgentLogic(input);
-  };
 
-  const simulateAgentLogic = async (_prompt: string) => {
-    setStatus('thinking');
-    await new Promise(r => setTimeout(r, 1500));
-    
-    setStatus('verifying');
-    await new Promise(r => setTimeout(r, 1200));
-    
-    setStatus('correcting'); // The "Self-Correction" phase
-    await new Promise(r => setTimeout(r, 1800));
-    
-    setStatus('finalizing');
-    await new Promise(r => setTimeout(r, 1000));
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-offline`,
+          sender: 'ai',
+          text: 'Backend is not connected. Start backend/server.ts on port 8080.',
+        },
+      ]);
+      return;
+    }
 
-    const aiMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      sender: 'ai',
-      text: 'I reviewed your prompt and returned a corrected response.'
-    };
-    
-    setMessages(prev => [...prev, aiMsg]);
-    setStatus(null);
+    ws.send(
+      JSON.stringify({
+        type: 'start_analysis',
+        prompt,
+      })
+    );
   };
 
   return (
@@ -164,6 +230,9 @@ export default function AgentUI() {
                 </button>
                 <h1 className="brand-font text-xl text-slate-900 sm:text-2xl">Killua AI</h1>
               </div>
+              <p className={`text-xs ${isConnected ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </p>
             </div>
           </header>
 
