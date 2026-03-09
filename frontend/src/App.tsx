@@ -68,6 +68,123 @@ const statusCopy: Record<Exclude<Stage, null>, string> = {
   finalizing: 'Finalizing',
 };
 
+function renderTextBlocks(text: string, keyPrefix: string): ReactNode[] {
+  const blocks = text.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+  const nodes: ReactNode[] = [];
+
+  blocks.forEach((block, index) => {
+    if (block.startsWith('### ')) {
+      nodes.push(
+        <h3 key={`${keyPrefix}-h-${index}`} className="text-sm font-semibold text-slate-900">
+          {block.slice(4).trim()}
+        </h3>
+      );
+      return;
+    }
+
+    if (block.startsWith('## ')) {
+      nodes.push(
+        <h3 key={`${keyPrefix}-h2-${index}`} className="text-sm font-semibold text-slate-900">
+          {block.slice(3).trim()}
+        </h3>
+      );
+      return;
+    }
+
+    const orderedLines = block
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^\d+\.\s+/.test(line));
+    if (orderedLines.length > 0 && orderedLines.length === block.split('\n').filter((l) => l.trim()).length) {
+      nodes.push(
+        <ol key={`${keyPrefix}-ol-${index}`} className="list-decimal space-y-1 pl-5 text-sm leading-relaxed">
+          {orderedLines.map((line, lineIndex) => (
+            <li key={`${keyPrefix}-ol-li-${index}-${lineIndex}`}>{line.replace(/^\d+\.\s+/, '')}</li>
+          ))}
+        </ol>
+      );
+      return;
+    }
+
+    const bulletLines = block
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^[-*]\s+/.test(line));
+    if (bulletLines.length > 0 && bulletLines.length === block.split('\n').filter((l) => l.trim()).length) {
+      nodes.push(
+        <ul key={`${keyPrefix}-ul-${index}`} className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
+          {bulletLines.map((line, lineIndex) => (
+            <li key={`${keyPrefix}-ul-li-${index}-${lineIndex}`}>{line.replace(/^[-*]\s+/, '')}</li>
+          ))}
+        </ul>
+      );
+      return;
+    }
+
+    nodes.push(
+      <p key={`${keyPrefix}-p-${index}`} className="whitespace-pre-wrap text-sm leading-relaxed">
+        {block}
+      </p>
+    );
+  });
+
+  return nodes;
+}
+
+function renderMessageContent(message: Message): ReactNode {
+  if (message.sender === 'user') {
+    return <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>;
+  }
+
+  const nodes: ReactNode[] = [];
+  const regex = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let codeIndex = 0;
+
+  while ((match = regex.exec(message.text)) !== null) {
+    const plainText = message.text.slice(lastIndex, match.index).trim();
+    if (plainText) {
+      nodes.push(
+        <div key={`${message.id}-txt-${codeIndex}`} className="space-y-2">
+          {renderTextBlocks(plainText, `${message.id}-txt-${codeIndex}`)}
+        </div>
+      );
+    }
+
+    const language = (match[1] || 'text').trim();
+    const code = (match[2] || '').trim();
+    nodes.push(
+      <div key={`${message.id}-code-wrap-${codeIndex}`} className="space-y-1">
+        {language && (
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">{language}</p>
+        )}
+        <pre className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-950 p-3 text-xs leading-relaxed text-slate-100">
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+
+    lastIndex = regex.lastIndex;
+    codeIndex += 1;
+  }
+
+  const trailingText = message.text.slice(lastIndex).trim();
+  if (trailingText) {
+    nodes.push(
+      <div key={`${message.id}-trail`} className="space-y-2">
+        {renderTextBlocks(trailingText, `${message.id}-trail`)}
+      </div>
+    );
+  }
+
+  if (nodes.length === 0) {
+    return <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>;
+  }
+
+  return <div className="space-y-3">{nodes}</div>;
+}
+
 export default function AgentUI() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -259,7 +376,7 @@ export default function AgentUI() {
                         : 'border-slate-200 bg-white/90 text-slate-800 shadow-[0_10px_24px_rgba(148,163,184,0.2)]'
                     }`}
                   >
-                    <p className="text-sm leading-relaxed">{m.text}</p>
+                    {renderMessageContent(m)}
                   </div>
                 </div>
               ))}
