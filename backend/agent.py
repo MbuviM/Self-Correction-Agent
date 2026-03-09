@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from functools import lru_cache
 from typing import Any, NotRequired, TypedDict
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
-from langchain_aws import ChatBedrock
+from langchain_aws import BedrockLLM, ChatBedrock, ChatBedrockConverse
 from langgraph.graph import END, START, StateGraph
 from pinecone import Pinecone
 
@@ -47,7 +48,12 @@ def _get_model_config() -> tuple[str, str | None]:
 
 def _get_llm() -> ChatBedrock:
     model_name, region_name = _get_model_config()
-    return ChatBedrock(model_id=model_name, region_name=region_name)
+    return ChatBedrock(model=model_name, region=region_name)
+
+
+def _get_converse_llm() -> ChatBedrockConverse:
+    model_name, region_name = _get_model_config()
+    return ChatBedrockConverse(model=model_name, region_name=region_name)
 
 # make every content a string
 def _stringify_content(content: Any) -> str:
@@ -61,26 +67,83 @@ def _stringify_content(content: Any) -> str:
 def _invoke_generation(query: str) -> str:
     instructions = (
         "Generate a concise first-pass implementation draft. "
-        "Do not invent library APIs."
+        "Do not invent library APIs. "
+        "Format output as markdown with headings: "
+        "'### Code' (single fenced code block) and "
+        "'### Explanation' (short bullets or numbered points)."
     )
+    messages = [SystemMessage(content=instructions), HumanMessage(content=query)]
+    errors: list[str] = []
+
+    try:
+        llm = _get_converse_llm()
+        response = llm.invoke(messages)
+        return _stringify_content(response.content).strip()
+    except Exception as exc:
+        errors.append(f"Converse error: {type(exc).__name__}: {exc}")
 
     try:
         llm = _get_llm()
-        response = llm.invoke(
-            [
-                SystemMessage(content=instructions),
-                HumanMessage(content=query),
-            ]
-        )
+        response = llm.invoke(messages)
         return _stringify_content(response.content).strip()
-    except NotImplementedError:
-        from langchain_aws import BedrockLLM
+    except Exception as exc:
+        errors.append(f"Chat error: {type(exc).__name__}: {exc}")
 
+    try:
         model_name, region_name = _get_model_config()
         llm = BedrockLLM(model_id=model_name, region_name=region_name)
         prompt = f"{instructions}\n\nUser request:\n{query}\n\nAnswer:"
         response = llm.invoke(prompt)
         return _stringify_content(response).strip()
+    except Exception as exc:
+        errors.append(f"Text error: {type(exc).__name__}: {exc}")
+
+    raise RuntimeError(" | ".join(errors))
+
+
+def _format_response(draft: str, snippets: list[str]) -> str:
+    text = draft.strip()
+    if not text:
+        return ""
+
+    code = ""
+    code_lang = "text"
+    explanation = text
+
+    code_match = re.search(
+        r"```(?P<lang>[a-zA-Z0-9_+-]*)\s*(?P<code>[\s\S]*?)```",
+        text,
+    )
+    if code_match:
+        code_lang = (code_match.group("lang") or "text").strip()
+        code = code_match.group("code").strip()
+        start, end = code_match.span()
+        explanation = f"{text[:start]} {text[end:]}".strip()
+    else:
+        marker = re.search(r"\*\*Explanation:\*\*|Explanation:", text, flags=re.IGNORECASE)
+        if marker and marker.start() > 0:
+            candidate_code = text[: marker.start()].strip().strip("`")
+            if candidate_code:
+                code = candidate_code
+                if "flutter" in text.lower() or "import 'package:flutter" in candidate_code:
+                    code_lang = "dart"
+                explanation = text[marker.start() :].strip()
+
+    explanation = re.sub(r"^\*\*Explanation:\*\*\s*", "", explanation, flags=re.IGNORECASE).strip()
+    explanation = re.sub(r"^Explanation:\s*", "", explanation, flags=re.IGNORECASE).strip()
+
+    parts: list[str] = []
+    if code:
+        parts.append(f"### Code\n```{code_lang}\n{code}\n```")
+
+    if explanation:
+        parts.append(f"### Explanation\n{explanation}")
+
+    if snippets:
+        evidence = "\n".join(f"- {snippet}" for snippet in snippets[:3])
+        parts.append(f"### Sources\n{evidence}")
+
+    return "\n\n".join(parts) if parts else text
 
 
 @lru_cache(maxsize=1)
@@ -224,11 +287,7 @@ def evaluator_node(state: ModelState) -> dict[str, Any]:
     if not draft:
         return {"final_response": ""}
 
-    if snippets:
-        citations = "\n".join(f"- {snippet}" for snippet in snippets[:3])
-        final = f"{draft}\n\nGrounding snippets:\n{citations}"
-    else:
-        final = draft
+    final = _format_response(draft, snippets)
 
     return {"final_response": final}
 
