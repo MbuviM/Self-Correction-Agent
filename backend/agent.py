@@ -37,11 +37,17 @@ if load_dotenv is not None:
 
 
 # llm instance function
-def _get_llm() -> ChatBedrock:
+def _get_model_config() -> tuple[str, str | None]:
     model_name = os.getenv("LLM_MODEL_ID", "").strip()
     if not model_name:
         raise ValueError("LLM_MODEL_ID is missing.")
-    return ChatBedrock(model=model_name)
+    region_name = os.getenv("AWS_REGION", "").strip() or None
+    return model_name, region_name
+
+
+def _get_llm() -> ChatBedrock:
+    model_name, region_name = _get_model_config()
+    return ChatBedrock(model_id=model_name, region_name=region_name)
 
 # make every content a string
 def _stringify_content(content: Any) -> str:
@@ -50,6 +56,31 @@ def _stringify_content(content: Any) -> str:
     if isinstance(content, list):
         return "\n".join(str(item) for item in content)
     return str(content)
+
+
+def _invoke_generation(query: str) -> str:
+    instructions = (
+        "Generate a concise first-pass implementation draft. "
+        "Do not invent library APIs."
+    )
+
+    try:
+        llm = _get_llm()
+        response = llm.invoke(
+            [
+                SystemMessage(content=instructions),
+                HumanMessage(content=query),
+            ]
+        )
+        return _stringify_content(response.content).strip()
+    except NotImplementedError:
+        from langchain_aws import BedrockLLM
+
+        model_name, region_name = _get_model_config()
+        llm = BedrockLLM(model_id=model_name, region_name=region_name)
+        prompt = f"{instructions}\n\nUser request:\n{query}\n\nAnswer:"
+        response = llm.invoke(prompt)
+        return _stringify_content(response).strip()
 
 
 @lru_cache(maxsize=1)
@@ -100,21 +131,9 @@ def generator_node(state: ModelState) -> dict[str, Any]:
         draft = f"Draft response (placeholder): {query}"
     else:
         try:
-            llm = _get_llm()
-            response = llm.invoke(
-                [
-                    SystemMessage(
-                        content=(
-                            "Generate a concise first-pass implementation draft. "
-                            "Do not invent library APIs."
-                        )
-                    ),
-                    HumanMessage(content=query),
-                ]
-            )
-            draft = _stringify_content(response.content).strip()
-        except Exception:
-            draft = f"Draft response (fallback): {query}"
+            draft = _invoke_generation(query)
+        except Exception as exc:
+            draft = f"Draft response (fallback): {query}\n\nLLM error: {type(exc).__name__}: {exc}"
 
     return {
         "draft_response": draft,
